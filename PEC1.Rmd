@@ -1,0 +1,67 @@
+---
+title: "Algoritmo k-NN"
+author: "Marc Rodriguez"
+date: "10/24/2021"
+output: html_document
+params:
+    file_in: "splice.txt"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## implementacion codificación “one-hot”
+
+```{r one-hote}
+
+
+encode.onehot<-function(sequence){
+codes<-c("A","G","T","C","D","N","S","R")
+seq.splited<-unlist(strsplit(str_trim(sequence),""))
+c(t(sapply(seq.splited,function(x){match(codes,x,nomatch=0)})))
+}
+
+nuc_seq="CCAGCTGCATCACAGGAGGCCAGCGAGCAGGTCTGTTCCAAGGGCCTTCGAGCCAGTCTG"
+encode.onehot(nuc_seq)
+
+```
+
+
+```{r one-hote2}
+library(stringr)
+#seq.splited<-unlist(strsplit(nuc_seq,""))
+#output<-sapply(seq.splited,function(seq){match(codes,seq,nomatch=0)})
+#c(t(output))
+(nuc_seq)
+```
+
+
+```{r read}
+file1="splice.txt"
+data_in <- read.csv(file.path(params$file_in), header=FALSE)
+data_in
+```
+```{r}
+summary(data_in)
+```
+```{r}
+encode.onehot<-function(sequence){
+codes<-c("A","G","T","C","D","N","S","R")
+seq.splited<-unlist(strsplit(str_trim(sequence),""))
+sapply(seq.splited,function(x){match(codes,x,nomatch=0)})
+}
+
+test<-apply(data[3],1,encode.onehot)
+```
+
+
+```{r}
+encode.source <- function(data){
+  data.frame(data[1],data[2],apply(data[3],1,encode.onehot))
+}
+
+output<-encode.source(data_in)
+
+```
+
