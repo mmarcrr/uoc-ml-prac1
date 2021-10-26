@@ -64,10 +64,48 @@ colnames(mysplice)[2] <- "seq_name"
 
 ```{r}
 encode.source <- function(data){
-  data.frame(data[1],data[2],apply(data[3],1,encode.onehot))
+  data.frame(data[1],data[2],t(apply(data[3],1,encode.onehot)))
 }
 
 output<-encode.source(data_in)
 
+```
+
+```{r}
+load("splice_oh.Rdata")
+splice_subset<-subset(mysplice,select=-c(2,1))
+```
+
+
+```{r}
+################## data spliting
+set.seed(123) #fijar la semilla para el generador pseudoaleatorio
+train<-sample(1:nrow(splice_subset),round(2*nrow(splice_subset)/3,0))
+# create training and test data
+out_training<-splice_subset[train,]
+out_test<-splice_subset[-train,]
+# create labels for training and test data
+class_training<-mysplice[train,2]
+class_test<-mysplice[-train,2]
+
+```
+
+```{r}
+############### libraries loading
+library(class) # knn
+############## data prediction
+
+set.seed(123456) #fijar la semilla para el inicio del clasificador
+
+test_pred <- knn(train =out_training, test = out_test, cl = class_training, k=3)
+```
+
+```{r}
+# load the "gmodels" library
+library(gmodels)
+# Create the cross tabulation of predicted vs. actual
+############ evaluating model performance
+
+CrossTable(x = class_test, y = test_pred , prop.chisq=FALSE)
 ```
 
