@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ## implementacion codificación “one-hot”
 
 ```{r one-hote}
-
+library(stringr)
 
 encode.onehot<-function(sequence){
 codes<-c("A","G","T","C","D","N","S","R")
@@ -23,7 +23,9 @@ c(t(sapply(seq.splited,function(x){match(codes,x,nomatch=0)})))
 }
 
 nuc_seq="CCAGCTGCATCACAGGAGGCCAGCGAGCAGGTCTGTTCCAAGGGCCTTCGAGCCAGTCTG"
-encode.onehot(nuc_seq)
+example<-encode.onehot(nuc_seq)
+typeof(example)
+
 
 ```
 
@@ -49,10 +51,14 @@ summary(data_in)
 encode.onehot<-function(sequence){
 codes<-c("A","G","T","C","D","N","S","R")
 seq.splited<-unlist(strsplit(str_trim(sequence),""))
-sapply(seq.splited,function(x){match(codes,x,nomatch=0)})
+sapply(seq.splited,function(x){match(codes,x,nomatch=0)}, simplify = TRUE)
 }
 
-test<-apply(data[3],1,encode.onehot)
+mysplice<-data.frame(data_in[1],data_in[2],t(apply(data_in[3],1,encode.onehot)))
+colnames(mysplice)[1] <- "class"
+colnames(mysplice)[2] <- "seq_name"
+
+
 ```
 
 
