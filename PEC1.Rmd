@@ -73,7 +73,7 @@ output<-encode.source(data_in)
 
 ```{r}
 load("splice_oh.Rdata")
-splice_subset<-subset(mysplice,select=-c(2,1))
+splice_subset<-subset(output,select=-c(1,2))
 ```
 
 
@@ -85,8 +85,8 @@ train<-sample(1:nrow(splice_subset),round(2*nrow(splice_subset)/3,0))
 out_training<-splice_subset[train,]
 out_test<-splice_subset[-train,]
 # create labels for training and test data
-class_training<-mysplice[train,2]
-class_test<-mysplice[-train,2]
+class_training<-output[train,1]
+class_test<-output[-train,1]
 
 ```
 
@@ -95,8 +95,7 @@ class_test<-mysplice[-train,2]
 library(class) # knn
 ############## data prediction
 
-set.seed(123456) #fijar la semilla para el inicio del clasificador
-
+set.seed(123) #fijar la semilla para el inicio del clasificador
 test_pred <- knn(train =out_training, test = out_test, cl = class_training, k=3)
 ```
 
@@ -105,7 +104,44 @@ test_pred <- knn(train =out_training, test = out_test, cl = class_training, k=3)
 library(gmodels)
 # Create the cross tabulation of predicted vs. actual
 ############ evaluating model performance
-
 CrossTable(x = class_test, y = test_pred , prop.chisq=FALSE)
+```
+```{r}
+
+ks <- c(1, 5, 11, 21, 51, 71)
+resum <- data.frame(ks, FN=NA, FP=NA, mal_clas=NA)
+
+j <- 0
+for (i in ks){
+  j <- j +1
+  class_test_pred <-knn(train =out_training, test = out_test, cl = class_training, k=i)
+  conf.mat <- CrossTable(x = class_test, y = class_test_pred, prop.chisq=FALSE)
+  
+  resum[j,2:4] <- c(conf.mat$t[2,1], conf.mat$t[1,2], ((conf.mat$t[1,2]+conf.mat$t[2,1])/sum(conf.mat$t))*100)
+}
+```
+
+
+```{r}
+require(knitr, quietly = TRUE)
+kable(resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),
+align= c("l","c","c","c"), caption= paste("Algoritmo kNN: ",params$file_in ,sep=""))
+```
+```{r}
+# try several different values of k
+library(pROC)
+ks <- c(1, 5, 11, 21, 51, 71)
+par(mfrow=c(2,2))
+for (i in ks){
+  test_pred <- knn(train =out_training, test = out_test, cl = class_training, k=i, prob=TRUE)
+  prob <- attr(test_pred, "prob")
+  # convert the proportion of the votes for the winning class to p(test_pred == "SB")
+  prob1 <- ifelse(test_pred == "EI", prob, 1-prob)
+  
+  res <- auc(class_test,prob1)
+}
+pred_knn <- ROCR::prediction(prob1, class_test)
+pred_knn <- performance(pred_knn, "tpr", "fpr")
+plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main=paste("ROC curve, k: ", i, ", auc=", round(res,4)))
 ```
 
