@@ -3,14 +3,13 @@ title: "Predicción de los splice junctions"
 author: "Marc Rodriguez"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
-  pdf_document:
-    toc: yes
   html_document:
+    toc: yes
+  pdf_document:
     toc: yes
 params:
     file_in: "splice.txt"
     kvalues: !r c(1, 5, 11, 21, 51, 71)
-
 ---
 
 ```{r setup, include=FALSE}
@@ -26,7 +25,9 @@ library(class)
 library(gmodels)
 library(kableExtra)
 library(ROCR)
+library(AUC)
 library(ggseqlogo)
+require(knitr, quietly = TRUE)
 
 ```
 
@@ -82,48 +83,63 @@ head(data_in)
 ###(A2)breve descripción de los datos
 ```{r}
 str(data_in)
+```
+
+
+```{r}
 summary(data_in)
 ```
-```{r}
 
+```{r}
+knitr::kable(table(data_in[,1]), "pipe",caption="Tabla del número de sequencia de nucleotidos según la clase")
+```
+###(b) Transformar las secuencias de nucleótidos en vectores numéricos usando la función de transformación desarrollada anteriormente. 
+
+Generamos el dataframe los mas parecido al fichor splice_oh.RData aplicando la funcion onehot creada anteriormente.
+Tambien se renombral las columans v1 por class y v2 por seq_name
+```{r}
 mysplice<-data.frame(data_in[1],data_in[2],t(apply(data_in[3],1,encode.onehot,space)))
 colnames(mysplice)[1] <- "class"
 colnames(mysplice)[2] <- "seq_name"
-mysplice$V1<-factor(mysplice$V1, levels = c("EI","IE","N"))
-
 ```
 
-
+(c)Para el subset formado por las secuencias de las clases “EI” y “N”, y para el subset formado por
+las secuencias de las clases “IE” y “N”, realizar la implementación del algoritmo knn, con los
+siguientes pasos
 ```{r}
-
 EIN.data <- subset(mysplice,mysplice$class %in% c("N","EI"))
 IEN.data <- subset(mysplice,mysplice$class %in% c("N","IE"))
 EIN.onehot <-subset(EIN.data,select=-c(1,2))
 IEN.onehot <-subset(IEN.data,select=-c(1,2))
 ```
+Utilizando la semilla aleatoria 123, separar los datos en dos partes, una parte para training
+(67%) y una parte para test (33%).
 ```{r}
-################## data spliting
+#seed 123
+set.seed(123)
+
+#split data 2/3 and 1/3
 EIN.train<-sample(1:nrow(EIN.onehot),round(2*nrow(EIN.onehot)/3,0))
 IEN.train<-sample(1:nrow(EIN.onehot),round(2*nrow(IEN.onehot)/3,0))
 
-```
-
-
-```{r}
-# create training and test data
+# create training and test data for EI N
 EIN.training<-EIN.onehot[EIN.train,]
 EIN.test<-EIN.onehot[-EIN.train,]
+
+# create training and test data for IE N
 IEN.training<-IEN.onehot[IEN.train,]
 IEN.test<-IEN.onehot[-IEN.train,]
 
-# create labels for training and test data
+# create labels for training and test data classes EI N
 EIN.class_training<-EIN.data[EIN.train,1]
 EIN.class_test<-EIN.data[-EIN.train,1]
-# create labels for training and test data
+
+# create labels for training and test data classes IE N
 IEN.class_training<-IEN.data[IEN.train,1]
 IEN.class_test<-IEN.data[-IEN.train,1]
 
 ```
+Aplicamos la funcion knn sobre los datos dividos para ver el funcionamento
 ```{r}
 
 set.seed(123) #fijar la semilla para el inicio del clasificador
@@ -131,82 +147,78 @@ EIN.test_pred <- knn(train =EIN.training, test = EIN.test, cl = EIN.class_traini
 IEN.test_pred <- knn(train =IEN.training, test = IEN.test, cl = IEN.class_training, k=20)
 
 ```
-
-
+Generamos la tabla para ver el rendimiento  del algoritmo
+primero sobre las clases EI N
 ```{r}
-# load the "gmodels" library
-# Create the cross tabulation of predicted vs. actual
-############ evaluating model performance
 CrossTable(x = EIN.class_test, y = EIN.test_pred , prop.chisq=FALSE)
 ```
-```{r}
-# load the "gmodels" library
-# Create the cross tabulation of predicted vs. actual
-############ evaluating model performance
-CrossTable(x = IEN.class_test, y = IEN.test_pred , prop.chisq=FALSE)
-```
-```{r}
-load("splice_oh.Rdata")
-splice_subset<-subset(output,select=-c(1,2))
-```
+Y Sobre las clases IE N
 ```{r}
 
+CrossTable(x = IEN.class_test, y = IEN.test_pred , prop.chisq=FALSE)
+```
+Aplicar el knn (k = `r params$ksvalues`) basado en el training para predecir que secuencias del
+test son secuencias con puntos de splicing (splice junctions) o no. Además, realizar una curva
+ROC para cada k y mostrar el valor de AUC.
+
+Creamos una funcion para pode aplicar la misma sobre las diferentes classes
+```{r}
 testknn <-function(data.training,data.test,data.class_training,data.class_test,ks){
-  
-  resum <- data.frame(ks, FN=NA, FP=NA, mal_clas=NA)
+  summary <- data.frame(ks, FN=NA, FP=NA, mal_clas=NA)
   j <- 0
   for (i in ks){
     j <- j +1
     class_test_pred <-knn(train =data.training, test = data.test, cl = data.class_training, k=i)
     conf.mat <- CrossTable(x = data.class_test, y = class_test_pred, prop.chisq=FALSE)
-    resum[j,2:4] <- c(conf.mat$t[2,1], conf.mat$t[1,2], ((conf.mat$t[1,2]+conf.mat$t[2,1])/sum(conf.mat$t))*100)
+    summary[j,2:4] <- c(conf.mat$t[2,1], conf.mat$t[1,2], ((conf.mat$t[1,2]+conf.mat$t[2,1])/sum(conf.mat$t))*100)
   }
-  resum
+  summary
 }
 ```
 
-
+aplicamos la funcion testknn sobre las clases EI N 
 ```{r}
 require(knitr, quietly = TRUE)
 EIN.resum<-testknn(EIN.training,EIN.test,EIN.class_training,EIN.class_test,params$kvalues)
 kable(EIN.resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),
 align= c("l","c","c","c"), caption= paste("Algoritmo kNN: ",params$file_in ,sep=""))
 ```
+
+aplicamos la funcion testknn sbore las clases IE N
 ```{r}
 require(knitr, quietly = TRUE)
 IEN.resum<-testknn(IEN.training,IEN.test,IEN.class_training,IEN.class_test,params$kvalues)
 kable(IEN.resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),align= c("l","c","c","c"), caption= paste("Algoritmo kNN: ",params$file_in ,sep=""))
 
 ```
+Creamos una funcion para representar las curpas ROC para cada k 
 ```{r}
-# try several different values of k
-)
-
 myROC <-function(data.training,data.test,data.class_training,data.class_test,ks){
-  
   par(mfrow=c(3,2))
   for (i in ks){
     test_pred <-knn(train = data.training, test = data.test, cl = data.class_training, k=i,prob = TRUE)
     prob <- attr(test_pred, "prob")
     prob1 <- ifelse(test_pred == "N" , prob, 1-prob)
+    browser()
     res <- auc(data.class_test,prob1)
-
-  pred_knn <- ROCR::prediction(prob1, data.class_test)
-  pred_knn <- performance(pred_knn, "tpr", "fpr")
-  plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main=paste("ROC curve, k: ", i, ", auc=", round(res,4)))
+    browser()
+    pred_knn <- ROCR::prediction(prob1, data.class_test)
+    pred_knn <- performance(pred_knn, "tpr", "fpr")
+    plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main=paste("ROC curve, k: ", i, ", auc=", round(res,4)))
   }
 }
 
 ```
+hemos parametrizado las diferentes ks proporcionadas por el enunciado para que sea aplicable el mismo informe a diferentes configuraciones
 ```{r}
-ks <- c(1, 5, 11, 21, 51, 71)
-myROC(EIN.training,EIN.test,EIN.class_training,EIN.class_test,ks)
-
+myROC(EIN.training,EIN.test,EIN.class_training,EIN.class_test,params$kvalues)
 ```
 ```{r}
-myROC(IEN.training,IEN.test,IEN.class_training,IEN.class_test,ks)
+myROC(IEN.training,IEN.test,IEN.class_training,IEN.class_test,params$kvalues)
 
 ```
+En las curvas igual que se puede reflejar en las tablas podemos ver que la mejor agrupacion resulta ser con k=21 
+##Representar la sequencia logo de las tres clases de secuencias.
 ```{r}
 
 ggseqlogo(str_trim(subset(data_in, V1 == "IE")$V3))
