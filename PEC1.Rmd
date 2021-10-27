@@ -68,9 +68,41 @@ encode.source <- function(data){
 }
 
 output<-encode.source(data_in)
-
+out_subset.EIN <- subset(output,output$class %in% c("N","EI"))
+out_subset.IEN <- subset(output,output$class %in% c("N","II"))
+out_subset.EIN.onehot <-subset(out_subset.EIN,select=-c(1,2))
+out_subset.IEN.onehot <-subset(out_subset.IEN,select=-c(1,2))
+```
+```{r}
+################## data spliting
+out_subset.EIN.train<-sample(1:nrow(out_subset.EIN),round(2*nrow(out_subset.EIN)/3,0))
+out_subset.IEN.train<-sample(1:nrow(out_subset.IEN),round(2*nrow(out_subset.IEN)/3,0))
 ```
 
+
+```{r}
+# create training and test data
+out_subset.EIN.training<-out_subset.EIN[out_subset.EIN.train,]
+out_subset.EIN.test<-out_subset[-out_subset.EIN.train,]
+out_subset.IEN.training<-out_subset.IEN[out_subset.IEN.train,]
+out_subset.IEN.test<-out_subset[-out_subset.IEN.train,]
+
+# create labels for training and test data
+out_subset.EIN.class_training<-out_subset.EIN[out_subset.EIN.train,1]
+out_subset.EIN.class_test<-out_subset.EIN[-out_subset.EIN.train,1]
+# create labels for training and test data
+out_subset.IEN.class_training<-out_subset.IEN[out_subset.IEN.train,1]
+out_subset.IEN.class_test<-out_subset.IEN[-out_subset.IEN.train,1]
+
+```
+```{r}
+############### libraries loading
+library(class) # knn
+############## data prediction
+
+set.seed(123) #fijar la semilla para el inicio del clasificador
+test_pred <- knn(train =out_subset.EIN.training, test = out_subset.EIN.test, cl = out_subset.EIN.class_training, k=20)
+```
 ```{r}
 load("splice_oh.Rdata")
 splice_subset<-subset(output,select=-c(1,2))
