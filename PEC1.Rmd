@@ -63,36 +63,33 @@ colnames(mysplice)[2] <- "seq_name"
 
 
 ```{r}
-encode.source <- function(data){
-  data.frame(data[1],data[2],t(apply(data[3],1,encode.onehot)))
-}
 
-output<-encode.source(data_in)
-out_subset.EIN <- subset(output,output$class %in% c("N","EI"))
-out_subset.IEN <- subset(output,output$class %in% c("N","II"))
-out_subset.EIN.onehot <-subset(out_subset.EIN,select=-c(1,2))
-out_subset.IEN.onehot <-subset(out_subset.IEN,select=-c(1,2))
+EIN.data <- subset(mysplice,mysplice$class %in% c("N","EI"))
+IEN.data <- subset(mysplice,mysplice$class %in% c("N","IE"))
+EIN.onehot <-subset(EIN.data,select=-c(1,2))
+IEN.onehot <-subset(IEN.data,select=-c(1,2))
 ```
 ```{r}
 ################## data spliting
-out_subset.EIN.train<-sample(1:nrow(out_subset.EIN),round(2*nrow(out_subset.EIN)/3,0))
-out_subset.IEN.train<-sample(1:nrow(out_subset.IEN),round(2*nrow(out_subset.IEN)/3,0))
+EIN.train<-sample(1:nrow(EIN.onehot),round(2*nrow(EIN.onehot)/3,0))
+IEN.train<-sample(1:nrow(EIN.onehot),round(2*nrow(IEN.onehot)/3,0))
+
 ```
 
 
 ```{r}
 # create training and test data
-out_subset.EIN.training<-out_subset.EIN[out_subset.EIN.train,]
-out_subset.EIN.test<-out_subset[-out_subset.EIN.train,]
-out_subset.IEN.training<-out_subset.IEN[out_subset.IEN.train,]
-out_subset.IEN.test<-out_subset[-out_subset.IEN.train,]
+EIN.training<-EIN.onehot[EIN.train,]
+EIN.test<-EIN.onehot[-EIN.train,]
+IEN.training<-IEN.onehot[IEN.train,]
+IEN.test<-IEN.onehot[-IEN.train,]
 
 # create labels for training and test data
-out_subset.EIN.class_training<-out_subset.EIN[out_subset.EIN.train,1]
-out_subset.EIN.class_test<-out_subset.EIN[-out_subset.EIN.train,1]
+EIN.class_training<-EIN.data[EIN.train,1]
+EIN.class_test<-EIN.data[-EIN.train,1]
 # create labels for training and test data
-out_subset.IEN.class_training<-out_subset.IEN[out_subset.IEN.train,1]
-out_subset.IEN.class_test<-out_subset.IEN[-out_subset.IEN.train,1]
+IEN.class_training<-IEN.data[IEN.train,1]
+IEN.class_test<-IEN.data[-IEN.train,1]
 
 ```
 ```{r}
@@ -101,79 +98,104 @@ library(class) # knn
 ############## data prediction
 
 set.seed(123) #fijar la semilla para el inicio del clasificador
-test_pred <- knn(train =out_subset.EIN.training, test = out_subset.EIN.test, cl = out_subset.EIN.class_training, k=20)
-```
-```{r}
-load("splice_oh.Rdata")
-splice_subset<-subset(output,select=-c(1,2))
-```
-
-
-```{r}
-################## data spliting
-set.seed(123) #fijar la semilla para el generador pseudoaleatorio
-train<-sample(1:nrow(splice_subset),round(2*nrow(splice_subset)/3,0))
-# create training and test data
-out_training<-splice_subset[train,]
-out_test<-splice_subset[-train,]
-# create labels for training and test data
-class_training<-output[train,1]
-class_test<-output[-train,1]
+EIN.test_pred <- knn(train =EIN.training, test = EIN.test, cl = EIN.class_training, k=20)
+IEN.test_pred <- knn(train =IEN.training, test = IEN.test, cl = IEN.class_training, k=20)
 
 ```
 
-```{r}
-############### libraries loading
-library(class) # knn
-############## data prediction
-
-set.seed(123) #fijar la semilla para el inicio del clasificador
-test_pred <- knn(train =out_training, test = out_test, cl = class_training, k=3)
-```
 
 ```{r}
 # load the "gmodels" library
 library(gmodels)
 # Create the cross tabulation of predicted vs. actual
 ############ evaluating model performance
-CrossTable(x = class_test, y = test_pred , prop.chisq=FALSE)
+CrossTable(x = EIN.class_test, y = EIN.test_pred , prop.chisq=FALSE)
+```
+```{r}
+# load the "gmodels" library
+library(gmodels)
+# Create the cross tabulation of predicted vs. actual
+############ evaluating model performance
+CrossTable(x = IEN.class_test, y = IEN.test_pred , prop.chisq=FALSE)
+```
+```{r}
+load("splice_oh.Rdata")
+splice_subset<-subset(output,select=-c(1,2))
 ```
 ```{r}
 
-ks <- c(1, 5, 11, 21, 51, 71)
-resum <- data.frame(ks, FN=NA, FP=NA, mal_clas=NA)
-
-j <- 0
-for (i in ks){
-  j <- j +1
-  class_test_pred <-knn(train =out_training, test = out_test, cl = class_training, k=i)
-  conf.mat <- CrossTable(x = class_test, y = class_test_pred, prop.chisq=FALSE)
+testknn <-function(data.training,data.test,data.class_training,data.class_test,ks){
   
-  resum[j,2:4] <- c(conf.mat$t[2,1], conf.mat$t[1,2], ((conf.mat$t[1,2]+conf.mat$t[2,1])/sum(conf.mat$t))*100)
+  resum <- data.frame(ks, FN=NA, FP=NA, mal_clas=NA)
+  j <- 0
+  for (i in ks){
+    j <- j +1
+    class_test_pred <-knn(train =data.training, test = data.test, cl = data.class_training, k=i)
+    conf.mat <- CrossTable(x = data.class_test, y = class_test_pred, prop.chisq=FALSE)
+    resum[j,2:4] <- c(conf.mat$t[2,1], conf.mat$t[1,2], ((conf.mat$t[1,2]+conf.mat$t[2,1])/sum(conf.mat$t))*100)
+  }
+  resum
 }
 ```
 
 
 ```{r}
+ks <- c(1, 5, 11, 21, 51, 71)
 require(knitr, quietly = TRUE)
-kable(resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),
+EIN.resum<-testknn(EIN.training,EIN.test,EIN.class_training,EIN.class_test,ks)
+kable(EIN.resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),
 align= c("l","c","c","c"), caption= paste("Algoritmo kNN: ",params$file_in ,sep=""))
+```
+```{r}
+require(knitr, quietly = TRUE)
+IEN.resum<-testknn(IEN.training,IEN.test,IEN.class_training,IEN.class_test,ks)
+kable(IEN.resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),
+align= c("l","c","c","c"), caption= paste("Algoritmo kNN: ",params$file_in ,sep=""))
+
 ```
 ```{r}
 # try several different values of k
 library(pROC)
-ks <- c(1, 5, 11, 21, 51, 71)
-par(mfrow=c(2,2))
-for (i in ks){
-  test_pred <- knn(train =out_training, test = out_test, cl = class_training, k=i, prob=TRUE)
-  prob <- attr(test_pred, "prob")
-  # convert the proportion of the votes for the winning class to p(test_pred == "SB")
-  prob1 <- ifelse(test_pred == "EI", prob, 1-prob)
+library(class)
+library(ROCR)
+
+myROC <-function(data.training,data.test,data.class_training,data.class_test,ks){
   
-  res <- auc(class_test,prob1)
+  par(mfrow=c(3,2))
+  for (i in ks){
+    test_pred <-knn(train = data.training, test = data.test, cl = data.class_training, k=i,prob = TRUE)
+    prob <- attr(test_pred, "prob")
+    prob1 <- ifelse(test_pred == "N" , prob, 1-prob)
+    res <- auc(data.class_test,prob1)
+
+  pred_knn <- ROCR::prediction(prob1, data.class_test)
+  pred_knn <- performance(pred_knn, "tpr", "fpr")
+  plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main=paste("ROC curve, k: ", i, ", auc=", round(res,4)))
+  }
 }
-pred_knn <- ROCR::prediction(prob1, class_test)
-pred_knn <- performance(pred_knn, "tpr", "fpr")
-plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main=paste("ROC curve, k: ", i, ", auc=", round(res,4)))
+
+```
+```{r}
+ks <- c(1, 5, 11, 21, 51, 71)
+myROC(EIN.training,EIN.test,EIN.class_training,EIN.class_test,ks)
+
+```
+```{r}
+myROC(IEN.training,IEN.test,IEN.class_training,IEN.class_test,ks)
+
+```
+```{r}
+library(ggseqlogo)
+
+ggseqlogo(str_trim(subset(data_in, V1 == "IE")$V3))
+
+```
+```{r}
+ggseqlogo(str_trim(subset(data_in, V1 == "EI")$V3))
+```
+
+
+```{r}
+ggseqlogo(str_trim(subset(data_in, V1 == "N")$V3))
 ```
 
