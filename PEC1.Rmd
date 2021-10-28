@@ -25,7 +25,8 @@ library(class)
 library(gmodels)
 library(kableExtra)
 library(ROCR)
-library(AUC)
+library(pROC)
+
 library(ggseqlogo)
 require(knitr, quietly = TRUE)
 
@@ -45,16 +46,20 @@ El algoritmo kNN comienza con un conjunto de datos de entrenamiento compuesto po
 Apesar de ser un algorimos simple, es capaz de abordar tareas extremadamente complejas, como identificar masas cancerosas. 
 
 
-##Predicción de los splice junctions
-Los splice junctions son puntos en una secuencia de ADN en los que se elimina el ADN “superfluo” durante el proceso de síntesis de proteínas en organismos superiores. El problema que se plantea en este conjunto de datos es reconocer, dada una secuencia de ADN, los límites entre los exones (las partes de la secuencia de ADN retenidas después del splicing) y los intrones (las partes de la secuencia de ADN que se cortan). Este problema consta de dos subtareas: reconocer los límites exón/intrón (denominados sitios EI) y reconocer los límites intrón/exón (sitios IE). En la comunidad biológica, las fronteras de la IE se denominan acceptors, mientras que las fronteras de la EI se denominan donors. Todos los ejemplos fueron tomados de Genbank 64.1. Las categorías “EI” e “IE” incluyen “genes con splicing” de los primates en Genbank 64.1. Los ejemplos de no splicing fueron tomados de secuencias que se sabe que no incluyen un sitio de splicing. Los datos estan disponibles en la PEC en el fichero splice.txt. El archivo contiene 3190 filas que corresponden a las distintas secuencias, y 3 columnas separadas por coma. La primera columna correspondiente a la clase de la secuencia (EI, IE o N), la segunda columna con el nombre identificador de la secuencia y la tercera columna  con la secuencia propiamente. Tratandose de secuencias de ADN, apareceran los nucleótidos identificados de
+## Predicción de los splice junctions
+Los splice junctions son puntos en una secuencia de ADN en los que se elimina el ADN “superfluo” durante el proceso de síntesis de proteínas en organismos superiores. El problema que se plantea en este conjunto de datos es reconocer, dada una secuencia de ADN, los límites entre los exones (las partes de la secuencia de ADN retenidas después del splicing) y los intrones (las partes de la secuencia de ADN que se cortan). Este problema consta de dos subtareas: reconocer los límites exón/intrón (denominados sitios EI) y reconocer los límites intrón/exón (sitios IE). En la comunidad biológica, las fronteras de la IE se denominan acceptors, mientras que las fronteras de la EI se denominan donors.
+
+Todos los ejemplos fueron tomados de Genbank 64.1. Las categorías “EI” e “IE” incluyen “genes con splicing” de los primates en Genbank 64.1. Los ejemplos de no splicing fueron tomados de secuencias que se sabe que no incluyen un sitio de splicing. Los datos estan disponibles en la PEC en el fichero splice.txt. El archivo contiene 3190 filas que corresponden a las distintas secuencias, y 3 columnas separadas por coma. La primera columna correspondiente a la clase de la secuencia (EI, IE o N), la segunda columna con el nombre identificador de la secuencia y la tercera columna  con la secuencia propiamente. Tratandose de secuencias de ADN, apareceran los nucleótidos identificados de
 manera estandar con las letras A, G, T y C. Además, aparecen otros caracteres entre los caracteres estándar,
 D, N, S y R, que indican ambigüedad según la siguiente tabla:
-|**caracter** | **significado** |
-|---------|---------------|
-|D | A o G o T |
-|N | A o G o C o T |
-|S | C o G |
-|R | A o G |
+
+| **caracter** | **significado** |
+| ------------ |:--------------- |
+| D | A o G o T |
+| N | A o G o C o T |
+| S | C o G |
+| R | A o G |
+
 La manera elegida para representar los datos es un paso crucial en los algoritmos. En el caso que nos ocupa, análisis basados en secuencias, se usará la codificación one-hot. La codificación one-hot representa cada nucleótido por un vector de 8 componentes, con 7 de ellas a 0 y una a 1. Pongamos por ejemplo, el nucleótido A se representa por (1,0,0,0,0,0,0,0), el nucleótido G por (0,1,0,0,0,0,0,0), el T por (0,0,1,0,0,0,0,0) y, finalmente, la C por (0,0,0,1,0,0,0,0) y los caracteres de ambiguedad los representaremos, la D por (0,0,0,0,1,0,0,0), la N por (0,0,0,0,0,1,0,0), la S por (0,0,0,0,0,0,1,0) y la R por (0,0,0,0,0,0,0,1).
 
 ## función en R one-hot encoding
@@ -73,14 +78,14 @@ Ejemplo de apliacacion monstrando el resultado como vector
 nuc_seq="CCAGCTGCATCACAGGAGGCCAGCGAGCAGGTCTGTTCCAAGGGCCTTCGAGCCAGTCTG"
 c(t(encode.onehot(nuc_seq,space)))
 ```
-##Desarrollo de un script en R que implementa un clasificador knn. 
-###(A1) Leer los datos del fichero splice.txt 
+## Desarrollo de un script en R que implementa un clasificador knn. 
+### (A1) Leer los datos del fichero splice.txt 
 Leemos el fichero `r params$file_in` que es un parametro del documento 
 ```{r read}
 data_in <- read.csv(file.path(params$file_in), header=FALSE)
 head(data_in)
 ```
-###(A2)breve descripción de los datos
+### (A2)breve descripción de los datos
 ```{r}
 str(data_in)
 ```
@@ -93,7 +98,7 @@ summary(data_in)
 ```{r}
 knitr::kable(table(data_in[,1]), "pipe",caption="Tabla del número de sequencia de nucleotidos según la clase")
 ```
-###(b) Transformar las secuencias de nucleótidos en vectores numéricos usando la función de transformación desarrollada anteriormente. 
+### (b) Transformar las secuencias de nucleótidos en vectores numéricos usando la función de transformación desarrollada anteriormente. 
 
 Generamos el dataframe los mas parecido al fichor splice_oh.RData aplicando la funcion onehot creada anteriormente.
 Tambien se renombral las columans v1 por class y v2 por seq_name
@@ -199,9 +204,7 @@ myROC <-function(data.training,data.test,data.class_training,data.class_test,ks)
     test_pred <-knn(train = data.training, test = data.test, cl = data.class_training, k=i,prob = TRUE)
     prob <- attr(test_pred, "prob")
     prob1 <- ifelse(test_pred == "N" , prob, 1-prob)
-    browser()
     res <- auc(data.class_test,prob1)
-    browser()
     pred_knn <- ROCR::prediction(prob1, data.class_test)
     pred_knn <- performance(pred_knn, "tpr", "fpr")
     plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main=paste("ROC curve, k: ", i, ", auc=", round(res,4)))
@@ -218,7 +221,7 @@ myROC(IEN.training,IEN.test,IEN.class_training,IEN.class_test,params$kvalues)
 
 ```
 En las curvas igual que se puede reflejar en las tablas podemos ver que la mejor agrupacion resulta ser con k=21 
-##Representar la sequencia logo de las tres clases de secuencias.
+## Representar la sequencia logo de las tres clases de secuencias.
 ```{r}
 
 ggseqlogo(str_trim(subset(data_in, V1 == "IE")$V3))
