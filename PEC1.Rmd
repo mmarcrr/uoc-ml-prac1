@@ -79,6 +79,7 @@ D, N, S y R, que indican ambigüedad según la siguiente tabla:
 
 La manera elegida para representar los datos es un paso crucial en los algoritmos. En el caso que nos ocupa, análisis basados en secuencias, se usará la codificación one-hot. La codificación one-hot representa cada nucleótido por un vector de 8 componentes, con 7 de ellas a 0 y una a 1. Pongamos por ejemplo, el nucleótido A se representa por (1,0,0,0,0,0,0,0), el nucleótido G por (0,1,0,0,0,0,0,0), el T por (0,0,1,0,0,0,0,0) y, finalmente, la C por (0,0,0,1,0,0,0,0) y los caracteres de ambigüedad los representaremos, la D por (0,0,0,0,1,0,0,0), la N por (0,0,0,0,0,1,0,0), la S por (0,0,0,0,0,0,1,0) y la R por (0,0,0,0,0,0,0,1).
 
+
 ## función en R one-hot encoding
 
 función en R que implementa la codificación “one-hot” (one-hot encoding) de las secuencias, Recibe como paramentro la secuencia y el espacio de posibles caracteres
@@ -89,33 +90,41 @@ encode.onehot<-function(sequence,space){
   sapply(seq.splited,function(code){match(space,code,nomatch=0)}, simplify = TRUE)
 }
 ```
+
 Ejemplo de aplicación monstrando el resultado como vector 
+
 
 ```{r one-hote-example}
 nuc_seq="CCAGCTGCATCACAGGAGGCCAGCGAGCAGGTCTGTTCCAAGGGCCTTCGAGCCAGTCTG"
 c(t(encode.onehot(nuc_seq,space)))
 ```
+
 ## Desarrollo de un script en R que implementa un clasificador knn. 
 ### (A1) Leer los datos del fichero splice.txt 
+
 Leemos el fichero `r params$file_in` que es un parámetro del documento 
+
 ```{r read}
 data_in <- read.csv(file.path(params$file_in), header=FALSE)
+
+```
+
+### (A2)breve descripción de los datos
+Observamos algunos valores del fichero
+```{r}
 head(data_in)
 ```
-### (A2)breve descripción de los datos
+vemos una descripcion de los datos
 ```{r}
 str(data_in)
 ```
+Los datos leidos del fichero `r params$file_in` contiene 3190 filas que corresponden a las distintas secuencias, y 3 columnas separadas por coma. La primera columna correspondiente a la clase de la secuencia (EI, IE o N), la segunda columna con el nombre identificador de la secuencia y la tercera columna  con la secuencia propiamente.
 
-
-```{r}
-summary(data_in)
-```
-
+Analizamos la cantidad de secuencias de cada clase, nos dara una idea del balanceo de los datos,
 ```{r}
 knitr::kable(table(data_in[,1]), "pipe",caption="Tabla del número de sequencia de nucleotidos según la clase")
 ```
-### (b) Transformar las secuencias de nucleótidos en vectores numéricos usando la función de transformación desarrollada anteriormente. 
+### (B) Transformar las secuencias de nucleótidos en vectores numéricos usando la función de transformación desarrollada anteriormente. 
 
 Generamos el dataframe los mas parecido al fichero splice_oh.RData aplicando la función onehot creada anteriormente.
 También se renombrar las columnas v1 por class y v2 por seq_name
@@ -125,63 +134,70 @@ colnames(mysplice)[1] <- "class"
 colnames(mysplice)[2] <- "seq_name"
 ```
 
-(c)Para el subset formado por las secuencias de las clases “EI” y “N”, y para el subset formado por
-las secuencias de las clases “IE” y “N”, realizar la implementación del algoritmo knn, con los
-siguientes pasos
+### (C)Para el subset formado por las secuencias de las clases “EI” y “N”, y para el subset formado por las secuencias de las clases “IE” y “N”, realizar la implementación del algoritmo knn
+
+Creamos los subset de "EI"-"N" y "IE"-"N" 
 ```{r}
 EIN.data <- subset(mysplice,mysplice$class %in% c("N","EI"))
 IEN.data <- subset(mysplice,mysplice$class %in% c("N","IE"))
+```
+Aplicamos la funcion onehot a la columna 3 que es la que contiene las sequencias.  
+
+```{r}
 EIN.onehot <-subset(EIN.data,select=-c(1,2))
 IEN.onehot <-subset(IEN.data,select=-c(1,2))
 ```
-Utilizando la semilla aleatoria 123, separar los datos en dos partes, una parte para training
+Utilizando la semilla aleatoria 123 para separar los datos en dos partes, una parte para training
 (67%) y una parte para test (33%).
 ```{r}
-#seed 123
 set.seed(123)
 
-#split data 2/3 and 1/3
-EIN.train<-sample(1:nrow(EIN.onehot),round(2*nrow(EIN.onehot)/3,0))
-IEN.train<-sample(1:nrow(EIN.onehot),round(2*nrow(IEN.onehot)/3,0))
+#generamos un sample de  2/3
+EIN.train<-sample(1:nrow(EIN.onehot),round(nrow(EIN.onehot)*2/3,0))
+IEN.train<-sample(1:nrow(EIN.onehot),round(nrow(IEN.onehot)*2/3,0))
+EIN.train
+```
 
-# creando set training y test para EI N
+Usamos la lista quenerada con la funcion sample de 2/3 de las posiciones para crear los subsets de entranamiento de EI-N y IE-N
+```{r}
 EIN.training<-EIN.onehot[EIN.train,]
-EIN.test<-EIN.onehot[-EIN.train,]
-
-## creando set training y test para  IE N
 IEN.training<-IEN.onehot[IEN.train,]
-IEN.test<-IEN.onehot[-IEN.train,]
 
-# creando etiquetas  de training y test para las clases EI N
+```
+El resto de valores los usaremos para el subset de test
+
+```{r}
+EIN.test<-EIN.onehot[-EIN.train,]
+IEN.test<-IEN.onehot[-IEN.train,]
+```
+
+Creamos las etiquetas de entrenamiento y validacion de las clases
+```{r}
 EIN.class_training<-EIN.data[EIN.train,1]
 EIN.class_test<-EIN.data[-EIN.train,1]
 
-# creando etiquetas  de training y test para las clases IE N
 IEN.class_training<-IEN.data[IEN.train,1]
 IEN.class_test<-IEN.data[-IEN.train,1]
 
 ```
+
 Aplicamos la función knn sobre los datos divididos para ver el funcionamiento
 ```{r}
-
-set.seed(123) #fijar la semilla para el inicio del clasificador
 EIN.test_pred <- knn(train =EIN.training, test = EIN.test, cl = EIN.class_training, k=20)
 IEN.test_pred <- knn(train =IEN.training, test = IEN.test, cl = IEN.class_training, k=20)
 
 ```
 Generamos la tabla para ver el rendimiento  del algoritmo
+
 primero sobre las clases EI N
 ```{r}
 CrossTable(x = EIN.class_test, y = EIN.test_pred , prop.chisq=FALSE)
 ```
 Y Sobre las clases IE N
 ```{r}
-
 CrossTable(x = IEN.class_test, y = IEN.test_pred , prop.chisq=FALSE)
 ```
-Aplicar el knn (k = `r params$ksvalues`) basado en el training para predecir que secuencias del
-test son secuencias con puntos de splicing (splice junctions) o no. Además, realizar una curva
-ROC para cada k y mostrar el valor de AUC.
+### (C)Aplicar el knn (k = `r params$ksvalues`) basado en el training para predecir que secuencias del test son secuencias con puntos de splicing (splice junctions) o no. Además, realizar una curva ROC para cada k y mostrar el valor de AUC.
 
 Creamos una funcion para pode aplicar la misma sobre las diferentes classes
 ```{r}
@@ -220,7 +236,8 @@ IEN.resum<-testknn(IEN.training,IEN.test,IEN.class_training,IEN.class_test,param
 kable(IEN.resum, col.names=c("valor k", "# falsos negativos","# falsos positivos", "% mal clasificados"),align= c("l","c","c","c"), caption= paste("Algoritmo kNN: ",params$file_in ,sep=""))
 
 ```
-Creamos una función para representar las curvas ROC para cada k 
+
+Creamos una funcion para representar las curvas ROC y mostrar el valor de AUC para los k valores `r params$kvalues` 
 
 ```{r}
 library(pROC)
@@ -238,14 +255,20 @@ myROC <-function(data.training,data.test,data.class_training,data.class_test,ks)
 }
 
 ```
-hemos parametrizado las diferentes ks proporcionadas por el enunciado para que sea aplicable el mismo informe a diferentes configuraciones
-```{r  message=FALSE,warning=FALSE,error=FALSE}
+
+Hemos parametrizado las diferentes ks proporcionadas por el enunciado para que sea aplicable el mismo informe a diferentes configuraciones
+mostramos en los graficos el valor de "auc" que es el area por debajo de la curva ROC. Que nos da una idea de como de buena es la clasificacion de los valores. 
+
+Primero mostramos las curvas de EI-N
+```{r}
 myROC(EIN.training,EIN.test,EIN.class_training,EIN.class_test,params$kvalues)
 ```
+A continuzcoin mostramos las curvas IE-N
 ```{r}
 myROC(IEN.training,IEN.test,IEN.class_training,IEN.class_test,params$kvalues)
 
 ```
+
 En las curvas igual que se puede reflejar en las tablas podemos ver que la mejor agrupación resulta ser con k=21 
 
 ## Representar la sequencia logo de las tres clases de secuencias.
